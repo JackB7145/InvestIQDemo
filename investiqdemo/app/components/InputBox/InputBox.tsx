@@ -1,110 +1,121 @@
 "use client";
+import { Box, IconButton } from "@mui/material";
+import { useState, useRef, KeyboardEvent } from "react";
 
-import { Box, IconButton, Tooltip } from "@mui/material";
-import { useState, useRef } from "react";
-import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
-
-interface InputBoxParameters {
-  handleSubmit: (prompt: string) => void;
-  highlightKeywords?: Set<string>;
+interface InputBoxProps {
+	handleSubmit: (prompt: string) => void;
 }
 
-export default function InputBox({ handleSubmit, highlightKeywords }: InputBoxParameters) {
-  const [prompt, setPrompt] = useState("");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [scrollTop, setScrollTop] = useState(0);
+export default function InputBox({ handleSubmit }: InputBoxProps) {
+	const [value, setValue] = useState("");
+	const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const onSubmit = () => {
-    if (!prompt.trim()) return;
-    handleSubmit(prompt);
-    setPrompt("");
-  };
+	const submit = () => {
+		if (!value.trim()) return;
+		handleSubmit(value.trim());
+		setValue("");
+		if (textareaRef.current) {
+			textareaRef.current.style.height = "auto";
+		}
+	};
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      onSubmit();
-    }
-  };
+	const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+		if (e.key === "Enter" && !e.shiftKey) {
+			e.preventDefault();
+			submit();
+		}
+	};
 
-  const handleScroll = () => {
-    if (textareaRef.current) setScrollTop(textareaRef.current.scrollTop);
-  };
+	const handleInput = () => {
+		const el = textareaRef.current;
+		if (!el) return;
+		el.style.height = "auto";
+		el.style.height = Math.min(el.scrollHeight, 120) + "px";
+	};
 
-  // Highlight keywords
-  const highlightedText = prompt.split(/(\s+)/).map((word, idx) => {
-    if (highlightKeywords?.has(word)) {
-      return (
-        <mark
-          key={idx}
-          style={{ backgroundColor: "rgba(255, 235, 59, 0.4)", color: "black" }}
-        >
-          {word}
-        </mark>
-      );
-    }
-    return word;
-  });
-
-  return (
-    <Box sx={{ position: "relative", p: 0 }}>
-      <Box
-        sx={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          padding: "0.5rem",
-          pointerEvents: "none",
-          color: "transparent",
-          whiteSpace: "pre-wrap",
-          wordWrap: "break-word",
-          fontFamily: "inherit",
-          fontSize: "inherit",
-          lineHeight: "inherit",
-          overflow: "hidden",
-          zIndex: 0,
-        }}
-      >
-        <div style={{ position: "relative", top: -scrollTop }}>{highlightedText}</div>
-      </Box>
-
-      {/* Actual textarea */}
-      <textarea
-        ref={textareaRef}
-        value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onScroll={handleScroll}
-        className="w-full bg-transparent border border-gray-300 rounded-md p-2 resize-none focus:outline-none focus:ring-0 focus:border-gray-300 relative z-10"
-        placeholder="Enter prompt here..."
-        rows={4}
-      />
-
-      <Tooltip title="Submit Prompt">
-        <IconButton
-          onClick={onSubmit}
-          sx={{
-            position: "absolute",
-            bottom: 5,
-            right: 5,
-            border: "2px solid",
-            borderColor: "primary.main",
-            color: "primary.main",
-            "&:hover": {
-              backgroundColor: "primary.light",
-              borderColor: "primary.dark",
-              color: "white",
-            },
-            width: 30,
-            height: 30,
-            zIndex: 20,
-          }}
-        >
-          <ArrowUpwardIcon />
-        </IconButton>
-      </Tooltip>
-    </Box>
-  );
+	return (
+		<Box
+			sx={{
+				display: "flex",
+				alignItems: "flex-end",
+				gap: 1.5,
+				bgcolor: "rgba(255,255,255,0.04)",
+				border: "1px solid rgba(255,255,255,0.08)",
+				borderRadius: "12px",
+				px: 2,
+				py: 1.25,
+				transition: "border-color 0.15s ease",
+				"&:focus-within": {
+					borderColor: "rgba(99,102,241,0.4)",
+					bgcolor: "rgba(99,102,241,0.03)",
+				},
+			}}
+		>
+			<textarea
+				ref={textareaRef}
+				value={value}
+				onChange={(e) => setValue(e.target.value)}
+				onKeyDown={handleKeyDown}
+				onInput={handleInput}
+				placeholder="Ask a question or request a chart..."
+				rows={1}
+				style={{
+					flex: 1,
+					background: "transparent",
+					border: "none",
+					outline: "none",
+					resize: "none",
+					color: "rgba(255,255,255,0.87)",
+					fontSize: "0.85rem",
+					lineHeight: "1.6",
+					fontFamily: "'DM Sans', sans-serif",
+					caretColor: "#6366f1",
+					minHeight: "24px",
+					maxHeight: "120px",
+				}}
+			/>
+			<Box
+				component="button"
+				onClick={submit}
+				disabled={!value.trim()}
+				sx={{
+					flexShrink: 0,
+					width: 32,
+					height: 32,
+					borderRadius: "8px",
+					border: "none",
+					cursor: value.trim() ? "pointer" : "not-allowed",
+					background: value.trim()
+						? "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)"
+						: "rgba(255,255,255,0.06)",
+					display: "flex",
+					alignItems: "center",
+					justifyContent: "center",
+					transition: "all 0.15s ease",
+					boxShadow: value.trim() ? "0 0 12px rgba(99,102,241,0.35)" : "none",
+					"&:hover": value.trim()
+						? {
+								transform: "scale(1.05)",
+								boxShadow: "0 0 18px rgba(99,102,241,0.5)",
+							}
+						: {},
+				}}
+			>
+				<svg
+					width="14"
+					height="14"
+					viewBox="0 0 14 14"
+					fill="none"
+				>
+					<path
+						d="M7 12V2M3 6l4-4 4 4"
+						stroke={value.trim() ? "white" : "rgba(255,255,255,0.2)"}
+						strokeWidth="1.75"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					/>
+				</svg>
+			</Box>
+		</Box>
+	);
 }
