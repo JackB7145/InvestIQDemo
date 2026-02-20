@@ -25,12 +25,11 @@ export default function ChatBox({ chatMessages }: ChatBoxProps) {
 				display: "flex",
 				flexDirection: "column",
 				gap: 2,
-				fontFamily: "'DM Sans', sans-serif",
-				"&::-webkit-scrollbar": { width: "4px" },
+				"&::-webkit-scrollbar": { width: "6px" },
 				"&::-webkit-scrollbar-track": { bgcolor: "transparent" },
 				"&::-webkit-scrollbar-thumb": {
-					bgcolor: "rgba(255,255,255,0.1)",
-					borderRadius: "4px",
+					bgcolor: "#c5d8f5",
+					borderRadius: "10px",
 				},
 			}}
 		>
@@ -43,8 +42,8 @@ export default function ChatBox({ chatMessages }: ChatBoxProps) {
 						alignItems: "center",
 						justifyContent: "center",
 						gap: 2,
-						opacity: 0.4,
 						py: 6,
+						opacity: 0.6,
 					}}
 				>
 					<Box
@@ -52,10 +51,12 @@ export default function ChatBox({ chatMessages }: ChatBoxProps) {
 							width: 40,
 							height: 40,
 							borderRadius: "12px",
-							border: "1px solid rgba(255,255,255,0.15)",
+							border: "1px solid #e3eaf5",
+							bgcolor: "white",
 							display: "flex",
 							alignItems: "center",
 							justifyContent: "center",
+							boxShadow: "0 2px 8px rgba(25,118,210,0.08)",
 						}}
 					>
 						<svg
@@ -66,14 +67,14 @@ export default function ChatBox({ chatMessages }: ChatBoxProps) {
 						>
 							<path
 								d="M9 2C5.13 2 2 5.13 2 9s3.13 7 7 7 7-3.13 7-7-3.13-7-7-7zm0 3c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm0 8c-1.66 0-3-1.34-3-3h1c0 1.1.9 2 2 2s2-.9 2-2h1c0 1.66-1.34 3-3 3z"
-								fill="rgba(255,255,255,0.6)"
+								fill="#1976d2"
 							/>
 						</svg>
 					</Box>
 					<Typography
 						sx={{
 							fontSize: "0.78rem",
-							color: "rgba(255,255,255,0.5)",
+							color: "#90a4c0",
 							textAlign: "center",
 							lineHeight: 1.6,
 						}}
@@ -101,7 +102,7 @@ export default function ChatBox({ chatMessages }: ChatBoxProps) {
 								fontWeight: 600,
 								letterSpacing: "0.08em",
 								textTransform: "uppercase",
-								color: "rgba(255,255,255,0.2)",
+								color: "#90a4c0",
 								mb: 0.5,
 								px: 0.5,
 							}}
@@ -115,48 +116,50 @@ export default function ChatBox({ chatMessages }: ChatBoxProps) {
 							maxWidth: "88%",
 							position: "relative",
 							...(msg.type === "user" && {
-								bgcolor: "#6366f1",
+								bgcolor: "#1976d2",
 								color: "white",
 								px: 2,
 								py: 1.25,
 								borderRadius: "12px 12px 2px 12px",
 								fontSize: "0.85rem",
 								lineHeight: 1.6,
-								boxShadow: "0 2px 12px rgba(99,102,241,0.3)",
+								boxShadow: "0 2px 8px rgba(25,118,210,0.25)",
 							}),
 							...(msg.type === "bot" && {
-								bgcolor: "rgba(255,255,255,0.05)",
-								border: "1px solid rgba(255,255,255,0.08)",
-								color: "rgba(255,255,255,0.87)",
+								bgcolor: "white",
+								border: "1px solid #e3eaf5",
+								color: "#1a1a2e",
 								px: 2,
 								py: 1.25,
 								borderRadius: "2px 12px 12px 12px",
 								fontSize: "0.85rem",
 								lineHeight: 1.7,
+								boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
 								"& p": { m: 0, mb: "0.5em" },
 								"& p:last-child": { mb: 0 },
 								"& ul, & ol": { m: 0, pl: 2, mb: "0.5em" },
 								"& pre": {
 									whiteSpace: "pre-wrap",
 									m: 0,
-									bgcolor: "rgba(0,0,0,0.4)",
+									bgcolor: "#f8fafd",
 									p: 1.5,
 									borderRadius: "6px",
-									border: "1px solid rgba(255,255,255,0.06)",
+									border: "1px solid #e3eaf5",
 									fontSize: "0.8rem",
 								},
 								"& code": {
 									fontSize: "0.8rem",
-									bgcolor: "rgba(0,0,0,0.3)",
+									bgcolor: "#f0f4fb",
 									px: 0.5,
 									borderRadius: "3px",
+									color: "#1976d2",
 								},
-								"& strong": { color: "white" },
+								"& strong": { color: "#1a1a2e" },
 							}),
 							...(msg.type === "thinking" && {
-								bgcolor: "rgba(99,102,241,0.04)",
-								border: "1px dashed rgba(99,102,241,0.2)",
-								color: "rgba(255,255,255,0.35)",
+								bgcolor: "rgba(25,118,210,0.04)",
+								border: "1px dashed #90c2ff",
+								color: "#90a4c0",
 								px: 2,
 								py: 1.25,
 								borderRadius: "2px 12px 12px 12px",
@@ -171,7 +174,6 @@ export default function ChatBox({ chatMessages }: ChatBoxProps) {
 							<Box
 								sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.75 }}
 							>
-								{/* Pulsing dots */}
 								{[0, 1, 2].map((i) => (
 									<Box
 										key={i}
@@ -179,8 +181,7 @@ export default function ChatBox({ chatMessages }: ChatBoxProps) {
 											width: 4,
 											height: 4,
 											borderRadius: "50%",
-											bgcolor: "#6366f1",
-											opacity: 0.7,
+											bgcolor: "#1976d2",
 											animation: "pulse 1.2s ease-in-out infinite",
 											animationDelay: `${i * 0.2}s`,
 											"@keyframes pulse": {
@@ -193,7 +194,7 @@ export default function ChatBox({ chatMessages }: ChatBoxProps) {
 								<Box
 									sx={{
 										fontSize: "0.65rem",
-										color: "rgba(99,102,241,0.6)",
+										color: "#1976d2",
 										letterSpacing: "0.06em",
 										textTransform: "uppercase",
 										fontWeight: 600,

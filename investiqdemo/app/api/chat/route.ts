@@ -17,7 +17,30 @@ export async function POST(req: NextRequest) {
 		body: JSON.stringify({ prompt }),
 	});
 
-	return new Response(pythonRes.body, {
-		headers: { "Content-Type": "text/plain; charset=utf-8" },
+	if (!pythonRes.ok) {
+		return new Response(
+			JSON.stringify({ error: `Upstream error: ${pythonRes.status}` }),
+			{ status: 502, headers: { "Content-Type": "application/json" } },
+		);
+	}
+
+	if (!pythonRes.body) {
+		return new Response(
+			JSON.stringify({ error: "No response body from upstream" }),
+			{ status: 502, headers: { "Content-Type": "application/json" } },
+		);
+	}
+
+	// Pipe through a TransformStream so Next.js handles backpressure correctly
+	const { readable, writable } = new TransformStream();
+	pythonRes.body.pipeTo(writable);
+
+	return new Response(readable, {
+		headers: {
+			"Content-Type": "text/plain; charset=utf-8",
+			// Prevent Next.js / nginx from buffering the stream
+			"X-Accel-Buffering": "no",
+			"Cache-Control": "no-cache",
+		},
 	});
 }
