@@ -1,64 +1,82 @@
 from langgraph.graph import StateGraph, END
 from state import AgentState
 from nodes import (
-    reason_node,
-    plan_tools_node,
-    tool_node,
-    respond_node,
-    display_decision_node,
-    merge_parallel_node,
-    evaluator_node,
+    project_manager_node,
+    thinker_node,
+    researcher_node,
+    display_agent_node,
+    response_agent_node,
+    validator_node,
 )
-from langchain_core.messages import AIMessage
 
+# =============================================================================
+# ROUTING
+# =============================================================================
 
-def should_use_tools(state: AgentState) -> str:
-    for msg in reversed(state["messages"]):
-        if isinstance(msg, AIMessage):
-            if getattr(msg, "tool_calls", []):
-                return "tools"
-            return "merge_2"
-    return "merge_2"
-
-def after_evaluation(state: AgentState) -> str:
+def after_validator(state: AgentState) -> str:
+    """Loop back to PM on fail, max 2 retries."""
     if state.get("evaluation") == "fail" and state.get("retry_count", 0) < 2:
         return "retry"
     return END
 
 
+# =============================================================================
+# GRAPH
+#
+# Flow:
+#   project_manager
+#        │
+#   ┌────┴────┐
+#   thinker  researcher   (parallel)
+#   └────┬────┘
+#        │  (LangGraph fan-in — both must complete before continuing)
+#   display_agent
+#        │
+#   response_agent
+#        │
+#   validator ──fail──> project_manager (max 2x)
+#        │
+#       END
+# =============================================================================
+
 def build_graph():
     builder = StateGraph(AgentState)
 
-    builder.add_node("reason", reason_node)
-    builder.add_node("plan_tools", plan_tools_node)
-    builder.add_node("tools", tool_node)
-    builder.add_node("merge_2", merge_parallel_node)
-    builder.add_node("respond", respond_node)
-    builder.add_node("display_decision", display_decision_node)
-    builder.add_node("merge_3", merge_parallel_node)
-    builder.add_node("evaluator", evaluator_node)
+    # Register nodes
+    builder.add_node("project_manager", project_manager_node)
+    builder.add_node("thinker",         thinker_node)
+    builder.add_node("researcher",      researcher_node)
+    builder.add_node("display_agent",   display_agent_node)
+    builder.add_node("response_agent",  response_agent_node)
+    builder.add_node("validator",       validator_node)
 
-    builder.set_entry_point("reason")
+    # Entry
+    builder.set_entry_point("project_manager")
 
-    # reason → plan_tools (no more parallel summarize branch)
-    builder.add_edge("reason", "plan_tools")
+    # PM fans out to both parallel nodes
+    builder.add_edge("project_manager", "thinker")
+    builder.add_edge("project_manager", "researcher")
 
-    builder.add_conditional_edges("plan_tools", should_use_tools, {
-        "tools": "tools",
-        "merge_2": "merge_2",
-    })
-    builder.add_edge("tools", "merge_2")
-    builder.add_edge("merge_2", "respond")
-    builder.add_edge("merge_2", "display_decision")
-    builder.add_edge("respond", "merge_3")
-    builder.add_edge("display_decision", "merge_3")
-    builder.add_edge("merge_3", "evaluator")
+    # Both parallel nodes fan in to display_agent
+    # LangGraph waits for ALL incoming edges before executing a node
+    builder.add_edge("thinker",     "display_agent")
+    builder.add_edge("researcher",  "display_agent")
 
-    builder.add_conditional_edges("evaluator", after_evaluation, {
-        "retry": "reason",
-        END: END,
-    })
+    # Linear from here
+    builder.add_edge("display_agent",  "response_agent")
+    builder.add_edge("response_agent", "validator")
+
+    # Validator: pass → END, fail → back to PM
+    builder.add_conditional_edges(
+        "validator",
+        after_validator,
+        {
+            "retry": "project_manager",
+            END: END,
+        },
+    )
 
     return builder.compile()
+
 
 agent_graph = build_graph()

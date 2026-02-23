@@ -3,7 +3,6 @@ import queue
 import threading
 import time
 import logging
-
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -12,7 +11,6 @@ from graph import agent_graph
 from state import AgentState
 
 log = logging.getLogger("agent")
-
 router = APIRouter()
 
 SYSTEM_PROMPT = (
@@ -38,6 +36,7 @@ def chat(req: ChatRequest):
 
     def generate():
         token_queue: queue.Queue = queue.Queue()
+        # Only non-thinking chunks land here (response_content, display_modules)
         final_chunks: list[str] = []
 
         def run_graph():
@@ -49,55 +48,71 @@ def chat(req: ChatRequest):
                 "stream_chunks": [],
                 "display_results": [],
                 "reasoning_summary": "",
+                "think_summary": "",
                 "evaluation": "",
                 "retry_count": 0,
                 "token_queue": token_queue,
-                "start_time": time.time(),  # SLA clock starts here
-                "needs_validation": False,  # flip to True for high-stakes queries
+                "start_time": time.time(),
+                "needs_validation": False,
             }
-
             try:
-                # stream_mode="updates" yields state delta per node as it completes
                 for event in agent_graph.stream(initial_state, stream_mode="updates"):
                     for node_name, node_state in event.items():
                         chunks = node_state.get("stream_chunks", [])
                         if chunks:
                             log.info(f"[STREAM] {len(chunks)} chunk(s) from '{node_name}'")
                         for chunk in chunks:
-                            final_chunks.append(chunk)
+                            try:
+                                parsed = json.loads(chunk)
+                                chunk_type = parsed.get("type", "")
+                            except Exception:
+                                chunk_type = ""
+
+                            if chunk_type == "thinking_content":
+                                # thinking already streamed live via token_queue
+                                # — do NOT add to final_chunks to avoid double-send
+                                pass
+                            else:
+                                # response_content and display_modules go here
+                                final_chunks.append(chunk)
+
             except Exception as e:
                 log.error(f"[GRAPH] Error during graph execution: {e}")
                 final_chunks.append(
-                    json.dumps({"type": "response_content", "data": "Something went wrong. Please try again."}) + "\n"
+                    json.dumps({
+                        "type": "response_content",
+                        "data": "Something went wrong. Please try again."
+                    }) + "\n"
                 )
             finally:
                 token_queue.put("__graph_done__")
 
-        # Run graph in background so we can stream thinking tokens live
+        # Run graph in background so thinking tokens stream live
         thread = threading.Thread(target=run_graph, daemon=True)
         thread.start()
 
-        # Drain token queue — yields thinking tokens to frontend as they arrive
+        # Drain token_queue live — only thinking tokens and sentinels come through here
         while True:
             item = token_queue.get()
-
             if item == "__thinking_done__":
                 log.info("[CONTROLLER] Thinking stream complete")
+                # Don't break — graph may still be running (reason, tools, respond)
                 continue
-
             if item == "__graph_done__":
                 log.info("[CONTROLLER] Graph complete — flushing remaining chunks")
                 break
-
-            # Live thinking token — yield immediately
+            # Live thinking token — yield immediately to frontend
             yield item
 
-        # Graph done — yield response_content and display_modules in correct order
-        TYPE_ORDER = {"thinking_content": 0, "response_content": 1, "display_modules": 2}
+        # Graph done — yield display_modules first, then response_content
+        TYPE_ORDER = {"display_modules": 0, "response_content": 1}
         final_chunks.sort(
-            key=lambda c: TYPE_ORDER.get(json.loads(c).get("type", ""), 99)
+            key=lambda c: TYPE_ORDER.get(
+                json.loads(c).get("type", "") if c.strip() else "", 99
+            )
         )
         for chunk in final_chunks:
+            log.info(f"[CONTROLLER] Flushing: {chunk[:80].strip()}")
             yield chunk
 
         thread.join()
