@@ -32,46 +32,38 @@ CONTEXT_TOOLS = {"get_company_context", "get_stock_data"}
 GRAPH_SCHEMAS = {
     "LineGraph": {
         "type": "LineGraph",
-        "data": [   # Plotly expects an array of traces
+        "data": [
             {
-                "x": [],        # x-axis values (e.g., timestamps)
-                "y": [],        # y-axis values (numeric)
-                "name": "",     # trace label (e.g., "Price")
+                "x": ["<int or float>"],       # array of numbers, timestamps or sequential
+                "y": ["<float>"],             # array of numeric values
+                "name": "<str series name>",  # str
                 "type": "scatter",
                 "mode": "lines+markers",
-                "line": {"color": "#1976d2"},
-            },
-            {
-                "x": [],
-                "y": [],
-                "name": "",
-                "type": "scatter",
-                "mode": "lines+markers",
-                "line": {"color": "#ff5722"},
-            },
+                "line": {"color": "<str color>"},
+            }
         ],
-        "layout": {      # Optional layout info, static
-            "title": "<descriptive title>",
-            "xaxis": {"title": "<x-axis label>"},
-            "yaxis": {"title": "<y-axis label>"},
+        "layout": {
+            "title": "<str title>",
+            "xaxis": {"title": "<str x-axis label>"},
+            "yaxis": {"title": "<str y-axis label>"},
         },
-        "dynamic_traces": True,  # agent should fill the x/y arrays
+        "dynamic_traces": True,
     },
     "BarGraph": {
         "type": "BarGraph",
         "data": [
             {
-                "x": [],        # categories
-                "y": [],        # numeric values
-                "name": "<metric>", 
+                "x": ["<str category>"],     # array of category labels
+                "y": ["<float>"],            # array of numeric values
+                "name": "<str metric name>",
                 "type": "bar",
-                "marker": {"color": "#4caf50"},
-            },
+                "marker": {"color": "<str color>"},
+            }
         ],
         "layout": {
-            "title": "<descriptive title>",
-            "xaxis": {"title": "<x-axis label>"},
-            "yaxis": {"title": "<y-axis label>"},
+            "title": "<str title>",
+            "xaxis": {"title": "<str x-axis label>"},
+            "yaxis": {"title": "<str y-axis label>"},
         },
         "dynamic_traces": True,
     },
@@ -79,22 +71,21 @@ GRAPH_SCHEMAS = {
         "type": "ScatterPlot",
         "data": [
             {
-                "x": [],        # x-values
-                "y": [],        # y-values
-                "name": "<trace name>",
+                "x": ["<float>"],           # array of x-values
+                "y": ["<float>"],           # array of y-values
+                "name": "<str trace name>",
                 "mode": "markers",
-                "marker": {"color": "#9c27b0"},
+                "marker": {"color": "<str color>"},
             }
         ],
         "layout": {
-            "title": "<descriptive title>",
-            "xaxis": {"title": "<x-axis label>"},
-            "yaxis": {"title": "<y-axis label>"},
+            "title": "<str title>",
+            "xaxis": {"title": "<str x-axis label>"},
+            "yaxis": {"title": "<str y-axis label>"},
         },
         "dynamic_traces": True,
     },
 }
-
 
 @tool
 def get_graph_data(graph_type: str = "all") -> list:
