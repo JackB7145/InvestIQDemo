@@ -42,7 +42,7 @@ def build_graph():
     builder.add_node("researcher",      researcher_node)
     builder.add_node("display_agent",   display_agent_node)
     builder.add_node("response_agent",  response_agent_node)
-    builder.add_node("validator",       validator_node)
+    # builder.add_node("validator",       validator_node)
     # Entry
     builder.set_entry_point("project_manager")
     # PM fans out to both parallel nodes
@@ -53,15 +53,15 @@ def build_graph():
     builder.add_edge("researcher",  "response_agent")
     # display_agent runs after response_agent — full context available
     builder.add_edge("response_agent", "display_agent")
-    builder.add_edge("display_agent",  "validator")
+    # builder.add_edge("display_agent",  "validator")
     # Validator: pass → END, fail → back to PM
-    builder.add_conditional_edges(
-        "validator",
-        after_validator,
-        {
-            "retry": "project_manager",
-            END: END,
-        },
-    )
+    # builder.add_conditional_edges(
+    #     "validator",
+    #     after_validator,
+    #     {
+    #         "retry": "project_manager",
+    #         END: END,
+    #     },
+    # )
     return builder.compile()
 agent_graph = build_graph()

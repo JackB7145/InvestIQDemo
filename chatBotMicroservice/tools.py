@@ -32,41 +32,66 @@ CONTEXT_TOOLS = {"get_company_context", "get_stock_data"}
 GRAPH_SCHEMAS = {
     "LineGraph": {
         "type": "LineGraph",
-        "data": {
+        "data": [   # Plotly expects an array of traces
+            {
+                "x": [],        # x-axis values (e.g., timestamps)
+                "y": [],        # y-axis values (numeric)
+                "name": "",     # trace label (e.g., "Price")
+                "type": "scatter",
+                "mode": "lines+markers",
+                "line": {"color": "#1976d2"},
+            },
+            {
+                "x": [],
+                "y": [],
+                "name": "",
+                "type": "scatter",
+                "mode": "lines+markers",
+                "line": {"color": "#ff5722"},
+            },
+        ],
+        "layout": {      # Optional layout info, static
             "title": "<descriptive title>",
-            "data": [
-                {"name": "<x-axis label>", "<metric_1>": 0, "<metric_2>": 0},
-                {"name": "...", "<metric_1>": 0, "<metric_2>": 0},
-            ],
-            "series": [
-                {"key": "<metric_1>", "color": "#1976d2"},
-                {"key": "<metric_2>", "color": "#ff5722"},
-            ],
+            "xaxis": {"title": "<x-axis label>"},
+            "yaxis": {"title": "<y-axis label>"},
         },
+        "dynamic_traces": True,  # agent should fill the x/y arrays
     },
     "BarGraph": {
         "type": "BarGraph",
-        "data": {
+        "data": [
+            {
+                "x": [],        # categories
+                "y": [],        # numeric values
+                "name": "<metric>", 
+                "type": "bar",
+                "marker": {"color": "#4caf50"},
+            },
+        ],
+        "layout": {
             "title": "<descriptive title>",
-            "data": [
-                {"name": "<category>", "<metric>": 0},
-                {"name": "...", "<metric>": 0},
-            ],
-            "series": [
-                {"key": "<metric>", "color": "#4caf50"},
-            ],
+            "xaxis": {"title": "<x-axis label>"},
+            "yaxis": {"title": "<y-axis label>"},
         },
+        "dynamic_traces": True,
     },
     "ScatterPlot": {
         "type": "ScatterPlot",
-        "data": {
+        "data": [
+            {
+                "x": [],        # x-values
+                "y": [],        # y-values
+                "name": "<trace name>",
+                "mode": "markers",
+                "marker": {"color": "#9c27b0"},
+            }
+        ],
+        "layout": {
             "title": "<descriptive title>",
-            "data": [
-                {"x": 0, "y": 0},
-                {"x": 0, "y": 0},
-            ],
-            "series": [{"xKey": "x", "yKey": "y", "color": "#9c27b0"}],
+            "xaxis": {"title": "<x-axis label>"},
+            "yaxis": {"title": "<y-axis label>"},
         },
+        "dynamic_traces": True,
     },
 }
 
@@ -131,20 +156,13 @@ def get_company_context(query: str) -> str:
 
 
 @tool
-def get_stock_data(symbol: str, function: str = "OVERVIEW") -> str:
-    """Retrieves real financial data from Alpha Vantage for a given stock ticker.
-    Call this when the user asks about a stock price, company financials, earnings,
-    revenue, P/E ratio, market cap, or any other financial metric for a public company.
+def get_stock_data(symbol: str, function: str = "OVERVIEW", limit: int | None = None) -> str:
+    """
+    Retrieves real financial data from Alpha Vantage for a given stock ticker.
     Args:
         symbol: The stock ticker symbol (e.g. 'AAPL', 'TSLA', 'MSFT').
-        function: The type of data to retrieve. Options:
-            - 'OVERVIEW'          — company profile, P/E, market cap, EPS, sector, etc.
-            - 'GLOBAL_QUOTE'      — current/latest stock price and daily change
-            - 'TIME_SERIES_DAILY' — last 30 days of daily OHLCV price data
-            - 'INCOME_STATEMENT'  — annual and quarterly revenue, net income, margins
-            - 'BALANCE_SHEET'     — assets, liabilities, equity
-            - 'CASH_FLOW'         — operating, investing, financing cash flows
-            - 'EARNINGS'          — EPS history and earnings surprises
+        function: The type of data to retrieve.
+        limit: Optional. Limits the number of items returned (e.g., days, reports, earnings). Defaults depend on function.
     """
     try:
         params = {
@@ -152,6 +170,8 @@ def get_stock_data(symbol: str, function: str = "OVERVIEW") -> str:
             "symbol": symbol.upper().strip(),
             "apikey": ALPHAVANTAGE_API_KEY,
         }
+
+        # Default output size
         if function == "TIME_SERIES_DAILY":
             params["outputsize"] = "compact"
 
@@ -159,6 +179,7 @@ def get_stock_data(symbol: str, function: str = "OVERVIEW") -> str:
         resp.raise_for_status()
         data = resp.json()
 
+        # Alpha Vantage errors / rate limits
         if "Error Message" in data:
             return f"Alpha Vantage error for '{symbol}': {data['Error Message']}"
         if "Note" in data:
@@ -166,6 +187,7 @@ def get_stock_data(symbol: str, function: str = "OVERVIEW") -> str:
         if "Information" in data:
             return f"Alpha Vantage API notice: {data['Information']}"
 
+        # OVerview
         if function == "OVERVIEW":
             keys = [
                 "Name", "Symbol", "Exchange", "Sector", "Industry",
@@ -183,6 +205,7 @@ def get_stock_data(symbol: str, function: str = "OVERVIEW") -> str:
                     lines.append(f"{k}: {v}")
             return "\n".join(lines)
 
+        # GLOBAL_QUOTE
         elif function == "GLOBAL_QUOTE":
             q = data.get("Global Quote", {})
             if not q:
@@ -199,12 +222,13 @@ def get_stock_data(symbol: str, function: str = "OVERVIEW") -> str:
                 f"Latest Trading Day: {q.get('07. latest trading day', 'N/A')}"
             )
 
+        # TIME_SERIES_DAILY
         elif function == "TIME_SERIES_DAILY":
             series = data.get("Time Series (Daily)", {})
             if not series:
                 return f"No daily price data found for '{symbol}'."
-            days = sorted(series.keys(), reverse=True)[:30]
-            lines = [f"[Alpha Vantage: {symbol.upper()} Daily Prices (last 30 days)]"]
+            days = sorted(series.keys(), reverse=True)[:limit or 30]
+            lines = [f"[Alpha Vantage: {symbol.upper()} Daily Prices (last {len(days)} days)]"]
             for day in days:
                 d = series[day]
                 lines.append(
@@ -213,64 +237,58 @@ def get_stock_data(symbol: str, function: str = "OVERVIEW") -> str:
                 )
             return "\n".join(lines)
 
-        elif function == "INCOME_STATEMENT":
-            reports = data.get("annualReports", [])
+        # INCOME_STATEMENT, BALANCE_SHEET, CASH_FLOW
+        report_functions = ["INCOME_STATEMENT", "BALANCE_SHEET", "CASH_FLOW"]
+        if function in report_functions:
+            report_key_map = {
+                "INCOME_STATEMENT": "annualReports",
+                "BALANCE_SHEET": "annualReports",
+                "CASH_FLOW": "annualReports",
+            }
+            reports = data.get(report_key_map[function], [])
             if not reports:
-                return f"No income statement data found for '{symbol}'."
-            lines = [f"[Alpha Vantage: {symbol.upper()} Income Statement (Annual)]"]
-            for r in reports[:3]:
-                lines.append(
-                    f"\nFiscalYear: {r.get('fiscalDateEnding', 'N/A')}\n"
-                    f"  Revenue: {r.get('totalRevenue', 'N/A')}\n"
-                    f"  Gross Profit: {r.get('grossProfit', 'N/A')}\n"
-                    f"  Net Income: {r.get('netIncome', 'N/A')}\n"
-                    f"  Operating Income: {r.get('operatingIncome', 'N/A')}\n"
-                    f"  EBITDA: {r.get('ebitda', 'N/A')}"
-                )
+                return f"No {function.replace('_',' ').lower()} data found for '{symbol}'."
+            lines = [f"[Alpha Vantage: {symbol.upper()} {function.replace('_',' ')} (Annual)]"]
+            for r in reports[:limit or 3]:
+                fiscal = r.get("fiscalDateEnding", "N/A")
+                if function == "INCOME_STATEMENT":
+                    lines.append(
+                        f"\nFiscalYear: {fiscal}\n"
+                        f"  Revenue: {r.get('totalRevenue', 'N/A')}\n"
+                        f"  Gross Profit: {r.get('grossProfit', 'N/A')}\n"
+                        f"  Net Income: {r.get('netIncome', 'N/A')}\n"
+                        f"  Operating Income: {r.get('operatingIncome', 'N/A')}\n"
+                        f"  EBITDA: {r.get('ebitda', 'N/A')}"
+                    )
+                elif function == "BALANCE_SHEET":
+                    lines.append(
+                        f"\nFiscalYear: {fiscal}\n"
+                        f"  Total Assets: {r.get('totalAssets', 'N/A')}\n"
+                        f"  Total Liabilities: {r.get('totalLiabilities', 'N/A')}\n"
+                        f"  Shareholder Equity: {r.get('totalShareholderEquity', 'N/A')}\n"
+                        f"  Cash & Equivalents: {r.get('cashAndCashEquivalentsAtCarryingValue', 'N/A')}\n"
+                        f"  Long Term Debt: {r.get('longTermDebt', 'N/A')}"
+                    )
+                elif function == "CASH_FLOW":
+                    lines.append(
+                        f"\nFiscalYear: {fiscal}\n"
+                        f"  Operating Cash Flow: {r.get('operatingCashflow', 'N/A')}\n"
+                        f"  Capital Expenditures: {r.get('capitalExpenditures', 'N/A')}\n"
+                        f"  Free Cash Flow: {r.get('freeCashFlow', 'N/A')}\n"
+                        f"  Dividend Payout: {r.get('dividendPayout', 'N/A')}"
+                    )
             return "\n".join(lines)
 
-        elif function == "BALANCE_SHEET":
-            reports = data.get("annualReports", [])
-            if not reports:
-                return f"No balance sheet data found for '{symbol}'."
-            lines = [f"[Alpha Vantage: {symbol.upper()} Balance Sheet (Annual)]"]
-            for r in reports[:3]:
-                lines.append(
-                    f"\nFiscalYear: {r.get('fiscalDateEnding', 'N/A')}\n"
-                    f"  Total Assets: {r.get('totalAssets', 'N/A')}\n"
-                    f"  Total Liabilities: {r.get('totalLiabilities', 'N/A')}\n"
-                    f"  Shareholder Equity: {r.get('totalShareholderEquity', 'N/A')}\n"
-                    f"  Cash & Equivalents: {r.get('cashAndCashEquivalentsAtCarryingValue', 'N/A')}\n"
-                    f"  Long Term Debt: {r.get('longTermDebt', 'N/A')}"
-                )
-            return "\n".join(lines)
-
-        elif function == "CASH_FLOW":
-            reports = data.get("annualReports", [])
-            if not reports:
-                return f"No cash flow data found for '{symbol}'."
-            lines = [f"[Alpha Vantage: {symbol.upper()} Cash Flow (Annual)]"]
-            for r in reports[:3]:
-                lines.append(
-                    f"\nFiscalYear: {r.get('fiscalDateEnding', 'N/A')}\n"
-                    f"  Operating Cash Flow: {r.get('operatingCashflow', 'N/A')}\n"
-                    f"  Capital Expenditures: {r.get('capitalExpenditures', 'N/A')}\n"
-                    f"  Free Cash Flow: {r.get('freeCashFlow', 'N/A')}\n"
-                    f"  Dividend Payout: {r.get('dividendPayout', 'N/A')}"
-                )
-            return "\n".join(lines)
-
+        # EARNINGS
         elif function == "EARNINGS":
-            reports = data.get("annualEarnings", [])
-            if not reports:
-                return f"No earnings data found for '{symbol}'."
+            annual_reports = data.get("annualEarnings", [])
+            quarterly_reports = data.get("quarterlyEarnings", [])
             lines = [f"[Alpha Vantage: {symbol.upper()} Annual EPS]"]
-            for r in reports[:5]:
+            for r in annual_reports[:limit or 5]:
                 lines.append(f"  {r.get('fiscalDateEnding', 'N/A')}: EPS={r.get('reportedEPS', 'N/A')}")
-            quarterly = data.get("quarterlyEarnings", [])
-            if quarterly:
-                lines.append("\nQuarterly Earnings (last 8):")
-                for r in quarterly[:8]:
+            if quarterly_reports:
+                lines.append("\nQuarterly Earnings:")
+                for r in quarterly_reports[:limit or 8]:
                     lines.append(
                         f"  {r.get('fiscalDateEnding', 'N/A')}: "
                         f"reported={r.get('reportedEPS', 'N/A')} "
@@ -279,6 +297,7 @@ def get_stock_data(symbol: str, function: str = "OVERVIEW") -> str:
                     )
             return "\n".join(lines)
 
+        # fallback: raw JSON (truncated)
         raw = json.dumps(data, indent=2)
         return f"[Alpha Vantage: {symbol.upper()} / {function}]\n{raw[:2000]}"
 
@@ -289,6 +308,8 @@ def get_stock_data(symbol: str, function: str = "OVERVIEW") -> str:
     except Exception as e:
         return f"Unexpected error fetching stock data for '{symbol}': {str(e)}"
 
-
 TOOLS = [get_graph_data, get_company_context, get_stock_data]
+
 TOOL_MAP = {t.name: t for t in TOOLS}
+
+TOOL_LIST = {t.name: t.description for t in TOOLS}

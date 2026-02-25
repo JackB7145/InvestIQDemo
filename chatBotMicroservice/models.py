@@ -49,3 +49,13 @@ llm_respond = ChatOllama(
         "timeout": HttpxTimeout(connect=5.0, read=180.0, write=5.0, pool=5.0)  # was 90s
     },
 )
+
+llm_large = ChatOllama(
+    model="llama3.2:3b",
+    num_ctx=8192,       # bigger context window for large API responses
+    num_predict=4096,   # allow more output tokens
+    num_thread=6,
+    repeat_penalty=1.15,
+    temperature=0.7,
+    keep_alive="10m",
+)

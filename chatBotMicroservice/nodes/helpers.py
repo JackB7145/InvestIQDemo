@@ -19,10 +19,10 @@ log = logging.getLogger("agent")
 # CONSTANTS — Graph-level limits
 # =============================================================================
 
-GRAPH_SLA_SECS          = 180   # hard timeout for the whole graph
-MAX_PROMPT_CHARS        = 4000  # max chars of a tool result stored in state
+GRAPH_SLA_SECS          = 1000   # hard timeout for the whole graph
+MAX_PROMPT_CHARS        = 15000  # max chars of a tool result stored in state
 MAX_MESSAGES            = 6     # max conversation turns kept
-RESEARCHER_MAX_ITERATIONS = 3   # max tool-call iterations per request
+RESEARCHER_MAX_ITERATIONS = 10   # max tool-call iterations per request
 
 # =============================================================================
 # CONSTANTS — LLM window sizes (chars sent to each node)

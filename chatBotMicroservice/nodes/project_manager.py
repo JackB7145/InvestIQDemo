@@ -5,7 +5,6 @@ from models import llm_medium
 from nodes.helpers import log, _sla_exceeded, _llm_text, _truncate
 from nodes.prompts import PROJECT_MANAGER_PROMPT
 
-
 def project_manager_node(state: AgentState) -> AgentState:
     log.info("━━━ [NODE 1 / PROJECT MANAGER] Planning steps")
     t0 = time.time()
