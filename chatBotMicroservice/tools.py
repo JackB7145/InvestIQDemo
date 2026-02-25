@@ -1,8 +1,11 @@
+import os
 import requests
 import json
+from dotenv import load_dotenv
 from langchain_core.tools import tool
 
-ALPHAVANTAGE_API_KEY = "IX51KIV6OI7GWOQD"
+load_dotenv()
+ALPHAVANTAGE_API_KEY = os.environ["ALPHAVANTAGE_API_KEY"]
 ALPHAVANTAGE_BASE_URL = "https://www.alphavantage.co/query"
 
 USER_DISPLAY_TOOLS = {"get_graph_data"}

@@ -11,7 +11,8 @@ export async function POST(req: NextRequest) {
 		});
 	}
 
-	const pythonRes = await fetch("http://localhost:8000/chat", {
+	const apiUrl = process.env.PYTHON_API_URL ?? "http://localhost:8000";
+	const pythonRes = await fetch(`${apiUrl}/chat`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ prompt }),
