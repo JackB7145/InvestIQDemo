@@ -6,28 +6,11 @@ from state import AgentState
 from models import llm_large
 from tools import TOOL_MAP
 from nodes.helpers import (
-    log, _sla_exceeded, _llm_text, _truncate,
+    log, _sla_exceeded, _truncate, llm_call,
     CHART_TYPE_EXTRACT,
     RESPOND_TOOL_CONTEXT_WINDOW,
     _extract_tool_context,
     extract_json_object,
-)
-
-# --------------------------
-# STRICT SYSTEM PROMPT
-# --------------------------
-DISPLAY_FILL_PROMPT = (
-    "You are a precise chart generator. STRICTLY follow these rules:\n"
-    "- Output ONLY valid JSON, one object, no markdown or explanations.\n"
-    "- 'data' array: one object per series. No combining series.\n"
-    "- 'x' and 'y' must be flat 1D arrays of numbers.\n"
-    "- 'name' must be a string describing the series.\n"
-    "- 'type' must always be 'scatter' for line graphs.\n"
-    "- 'mode' must be 'lines+markers'.\n"
-    "- 'line.color' or 'marker.color' must be a string (hex).\n"
-    "- Layout must include title, xaxis.title, yaxis.title.\n"
-    "- 7–28 points per series.\n"
-    "- Fill with real or illustrative numeric values. Do NOT put placeholder strings.\n"
 )
 
 # --------------------------
@@ -44,65 +27,33 @@ _GRAPH_TYPE_MAP = {
 }
 
 # --------------------------
-# SCHEMAS (simplified + type hints)
+# CALL 1 PROMPT: Data extraction only
 # --------------------------
-GRAPH_SCHEMAS = {
-    "LineGraph": {
-        "type": "LineGraph",
-        "data": [
-            {
-                "x": "int[]",        # flat array of integers
-                "y": "float[]",      # flat array of floats
-                "name": "str",
-                "type": "scatter",
-                "mode": "lines+markers",
-                "line": {"color": "str"},
-            }
-        ],
-        "layout": {
-            "title": "str",
-            "xaxis": {"title": "str"},
-            "yaxis": {"title": "str"},
-        },
-        "dynamic_traces": True,
-    },
-    "BarGraph": {
-        "type": "BarGraph",
-        "data": [
-            {
-                "x": "str[]",
-                "y": "float[]",
-                "name": "str",
-                "type": "bar",
-                "marker": {"color": "str"},
-            }
-        ],
-        "layout": {
-            "title": "str",
-            "xaxis": {"title": "str"},
-            "yaxis": {"title": "str"},
-        },
-        "dynamic_traces": True,
-    },
-    "ScatterPlot": {
-        "type": "ScatterPlot",
-        "data": [
-            {
-                "x": "float[]",
-                "y": "float[]",
-                "name": "str",
-                "mode": "markers",
-                "marker": {"color": "str"},
-            }
-        ],
-        "layout": {
-            "title": "str",
-            "xaxis": {"title": "str"},
-            "yaxis": {"title": "str"},
-        },
-        "dynamic_traces": True,
-    },
-}
+DATA_PROCESSOR_PROMPT = (
+    "You are a data extraction and organization assistant.\n"
+    "Given a user request and raw research context, extract and organize the relevant data.\n"
+    "Output ONLY valid JSON with this exact structure:\n"
+    "{\n"
+    '  "title": "string — descriptive chart title",\n'
+    '  "xaxis_label": "string — x axis label",\n'
+    '  "yaxis_label": "string — y axis label",\n'
+    '  "series": [\n'
+    "    {\n"
+    '      "name": "string — series name",\n'
+    '      "x": [1, 2, 3],\n'
+    '      "y": [1.2, 3.4, 5.6]\n'
+    "    }\n"
+    "  ]\n"
+    "}\n"
+    "Rules:\n"
+    "- x must be a flat 1D array of integers (e.g. years, indices)\n"
+    "- y must be a flat 1D array of numbers, matching x in length\n"
+    "- Each series gets its own object in the array\n"
+    "- 7–28 points per series\n"
+    "- If real data is available in context, use it. Otherwise use illustrative numeric values.\n"
+    "- No placeholder strings, no nulls, no nested arrays.\n"
+    "- Output ONLY the JSON object. No markdown, no explanation.\n"
+)
 
 # --------------------------
 # HELPER: JSON cleanup
@@ -136,56 +87,94 @@ def _validate_json(raw_text: str) -> str:
         return "{}"
 
 # --------------------------
+# HELPER: Deterministic chart builder
+# --------------------------
+COLORS = [
+    "#636EFA", "#EF553B", "#00CC96", "#AB63FA",
+    "#FFA15A", "#19D3F3", "#FF6692", "#B6E880",
+]
+
+def _build_chart_object(graph_type: str, organized_data: dict) -> dict:
+    title        = organized_data.get("title", "Chart")
+    xaxis_label  = organized_data.get("xaxis_label", "X")
+    yaxis_label  = organized_data.get("yaxis_label", "Y")
+    series       = organized_data.get("series", [])
+
+    if not series:
+        raise ValueError("No series data found in organized data")
+
+    layout = {
+        "title": title,
+        "xaxis": {"title": xaxis_label},
+        "yaxis": {"title": yaxis_label},
+    }
+
+    if graph_type == "LineGraph":
+        data = [
+            {
+                "x": s["x"], "y": s["y"],
+                "name": s.get("name", f"Series {i + 1}"),
+                "type": "scatter", "mode": "lines+markers",
+                "line": {"color": COLORS[i % len(COLORS)]},
+            }
+            for i, s in enumerate(series)
+        ]
+    elif graph_type == "BarGraph":
+        data = [
+            {
+                "x": [str(v) for v in s["x"]], "y": s["y"],
+                "name": s.get("name", f"Series {i + 1}"),
+                "type": "bar",
+                "marker": {"color": COLORS[i % len(COLORS)]},
+            }
+            for i, s in enumerate(series)
+        ]
+    elif graph_type == "ScatterPlot":
+        data = [
+            {
+                "x": s["x"], "y": s["y"],
+                "name": s.get("name", f"Series {i + 1}"),
+                "mode": "markers",
+                "marker": {"color": COLORS[i % len(COLORS)]},
+            }
+            for i, s in enumerate(series)
+        ]
+    else:
+        raise ValueError(f"Unknown graph type: {graph_type}")
+
+    return {"type": graph_type, "data": data, "layout": layout}
+
+
+# --------------------------
 # MAIN DISPLAY AGENT
 # --------------------------
 def display_agent_node(state: AgentState) -> AgentState:
     log.info("━━━ [DISPLAY AGENT] Determining visuals")
     t0 = time.time()
+
     if _sla_exceeded(state):
         return {"messages": [], "display_results": [], "stream_chunks": []}
 
-    pm_plan = state.get("pm_plan", "")
+    # ── Determine graph type from PM plan ─────────────────────────────────────
+    pm_plan     = state.get("pm_plan", "")
     chart_match = CHART_TYPE_EXTRACT.search(pm_plan)
-    raw_type = chart_match.group(1).strip().lower() if chart_match else "none"
-    graph_type = _GRAPH_TYPE_MAP.get(raw_type)
+    raw_type    = chart_match.group(1).strip().lower() if chart_match else "none"
+    graph_type  = _GRAPH_TYPE_MAP.get(raw_type)
+
     if not graph_type:
         return {"messages": [], "display_results": [], "stream_chunks": []}
 
-    schema_fn = TOOL_MAP.get("get_graph_data")
-    if not schema_fn:
-        return {"messages": [], "display_results": [], "stream_chunks": []}
-
-    try:
-        schemas = schema_fn.invoke({"graph_type": graph_type})
-        schema_template = schemas[0] if schemas else {}
-    except Exception as e:
-        log.error(f"Schema retrieval failed: {e}", exc_info=True)
-        return {"messages": [], "display_results": [], "stream_chunks": []}
-
-    user_msg = next(
+    user_msg     = next(
         (m.content for m in state["messages"] if isinstance(m, HumanMessage)), ""
     )
-
     tool_context = _extract_tool_context(state["messages"])
     context_section = (
         f"Research context (use these numbers only):\n{tool_context[:RESPOND_TOOL_CONTEXT_WINDOW]}"
         if tool_context else "Research context: None. Use illustrative numeric values."
     )
 
-    minified_schema = json.dumps(schema_template, separators=(",", ":"))
-
-    fill_user = (
-        f"User request: {user_msg[:300]}\n"
-        f"{context_section}\n"
-        f"Template to fill:\n{minified_schema}\n"
-        f"STRICT REQUIREMENTS: Use flat 1D arrays, no placeholder strings, each series separate."
-    )
-
-    display_results = []
-    tool_messages = []
     tool_id = f"tc_graph_{int(t0 * 1000)}"
-
-    ai_msg = AIMessage(
+    ai_msg  = AIMessage(
         content="",
         tool_calls=[{
             "name": "get_graph_data",
@@ -195,31 +184,59 @@ def display_agent_node(state: AgentState) -> AgentState:
         }]
     )
 
-    try:
-        fill_resp = llm_large.invoke([
-            SystemMessage(content=DISPLAY_FILL_PROMPT),
-            HumanMessage(content=fill_user),
-        ])
-        raw_text = _llm_text(fill_resp)
-        print(f"Raw LLM output:\n{raw_text}\n--- End of raw output ---")
-
-        cleaned_json = _validate_json(raw_text)
-        chart_obj = json.loads(cleaned_json)
-
-        # Enforce schema
-        if "type" not in chart_obj or "data" not in chart_obj or not chart_obj["data"]:
-            raise ValueError("Invalid chart object")
-
-        display_results.append(chart_obj)
-        tool_messages.append(ToolMessage(content="Chart generated successfully.", tool_call_id=tool_id))
-
-    except Exception as e:
-        tool_messages.append(ToolMessage(content=f"Chart generation failed: {e}", tool_call_id=tool_id))
+    def _fail(reason: str) -> AgentState:
+        log.error(f"[DISPLAY] {reason}")
         return {
-            "messages": [ai_msg] + tool_messages,
+            "messages": [ai_msg, ToolMessage(content=reason, tool_call_id=tool_id)],
             "display_results": [],
-            "stream_chunks": [],
-            "display_failed": True,
+            "stream_chunks":   [],
+            "display_failed":  True,
         }
 
-    return {"messages": [ai_msg] + tool_messages, "display_results": display_results, "stream_chunks": []}
+    # ── CALL 1: Extract & organize data via intermediary ──────────────────────
+    data_user_msg = (
+        f"User request: {user_msg[:300]}\n"
+        f"{context_section}\n"
+        f"Graph type: {graph_type}\n"
+        "Extract and organize the data needed for this chart."
+    )
+
+    raw_data_text = llm_call(
+        state,
+        llm_large.invoke,
+        [
+            SystemMessage(content=DATA_PROCESSOR_PROMPT),
+            HumanMessage(content=data_user_msg),
+        ],
+        status_before="📊 Extracting chart data…",
+        status_after="✅ Data extracted",
+        label="DISPLAY-data",
+    )
+
+    if not raw_data_text:
+        return _fail("Data processing call returned empty response")
+
+    log.debug(f"[DISPLAY] Raw data output: {_truncate(raw_data_text, 200)}")
+
+    try:
+        clean_json     = _validate_json(raw_data_text)
+        organized_data = json.loads(clean_json)
+        if "series" not in organized_data or not organized_data["series"]:
+            raise ValueError("No series data in response")
+    except Exception as e:
+        return _fail(f"Data processing failed: {e}")
+
+    # ── Build chart object deterministically ──────────────────────────────────
+    try:
+        chart_obj = _build_chart_object(graph_type, organized_data)
+    except Exception as e:
+        return _fail(f"Chart building failed: {e}")
+
+    log.info(f"[DISPLAY] ✓ Done in {time.time() - t0:.2f}s")
+
+    tool_msg = ToolMessage(content="Chart generated successfully.", tool_call_id=tool_id)
+    return {
+        "messages":       [ai_msg, tool_msg],
+        "display_results": [chart_obj],
+        "stream_chunks":   [],
+    }

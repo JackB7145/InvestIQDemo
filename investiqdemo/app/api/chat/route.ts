@@ -1,6 +1,9 @@
 // app/api/chat/route.ts
 import { NextRequest } from "next/server";
 
+export const maxDuration = 300;
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
 	const { prompt } = await req.json();
 

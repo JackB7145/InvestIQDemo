@@ -1,7 +1,7 @@
 "use client";
 import { Box, Typography } from "@mui/material";
 import { useEffect, useRef } from "react";
-import { ChartData } from "../../classes/charts";
+import { ChartData, PlotlyChart } from "../../classes/charts";
 
 interface GraphBoxProps {
 	charts: ChartData[];
@@ -64,7 +64,7 @@ export default function GraphBox({ charts }: GraphBoxProps) {
 				)}
 			</Box>
 
-			{/* Graph List */}
+			{/* Chart list */}
 			<Box
 				sx={{
 					flex: 1,
@@ -94,7 +94,6 @@ export default function GraphBox({ charts }: GraphBoxProps) {
 							opacity: 0.6,
 						}}
 					>
-						{/* Decorative bar chart illustration */}
 						<Box sx={{ position: "relative", width: 80, height: 60 }}>
 							{[0, 1, 2, 3].map((col) =>
 								[0, 1, 2].map((row) => (
@@ -126,70 +125,78 @@ export default function GraphBox({ charts }: GraphBoxProps) {
 						</Typography>
 					</Box>
 				) : (
-					charts.map((chart, idx) => (
-						<Box
-							key={idx}
-							sx={{
-								bgcolor: "white",
-								borderRadius: 2,
-								p: 2,
-								border: "1px solid #e3eaf5",
-								boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-								transition: "border-color 0.2s ease, box-shadow 0.2s ease",
-								"&:hover": {
-									borderColor: "#90c2ff",
-									boxShadow: "0 2px 12px rgba(25,118,210,0.1)",
-								},
-							}}
-						>
-							{/* Chart label row */}
+					charts.map((chart, idx) => {
+						console.log("Rendering chart:", chart);
+						return (
 							<Box
+								key={idx}
 								sx={{
-									display: "flex",
-									alignItems: "center",
-									justifyContent: "space-between",
-									mb: 1.5,
+									bgcolor: "white",
+									borderRadius: 2,
+									p: 2,
+									border: "1px solid #e3eaf5",
+									boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+									transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+									"&:hover": {
+										borderColor: "#90c2ff",
+										boxShadow: "0 2px 12px rgba(25,118,210,0.1)",
+									},
 								}}
 							>
-								<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-									<Box
-										sx={{
-											width: 6,
-											height: 6,
-											borderRadius: "50%",
-											bgcolor: "#1976d2",
-										}}
-									/>
-									<Typography
-										sx={{
-											fontSize: "0.68rem",
-											fontWeight: 600,
-											letterSpacing: "0.08em",
-											textTransform: "uppercase",
-											color: "#90a4c0",
-										}}
-									>
-										Chart {idx + 1}
-									</Typography>
-								</Box>
+								{/* Label row */}
 								<Box
 									sx={{
-										fontSize: "0.65rem",
-										color: "#90a4c0",
-										bgcolor: "#f0f4fb",
-										border: "1px solid #e3eaf5",
-										px: 1,
-										py: 0.25,
-										borderRadius: "4px",
-										letterSpacing: "0.04em",
+										display: "flex",
+										alignItems: "center",
+										justifyContent: "space-between",
+										mb: 1.5,
 									}}
 								>
-									Generated
+									<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+										<Box
+											sx={{
+												width: 6,
+												height: 6,
+												borderRadius: "50%",
+												bgcolor: "#1976d2",
+											}}
+										/>
+										<Typography
+											sx={{
+												fontSize: "0.68rem",
+												fontWeight: 600,
+												letterSpacing: "0.08em",
+												textTransform: "uppercase",
+												color: "#90a4c0",
+											}}
+										>
+											Chart {idx + 1}
+										</Typography>
+									</Box>
+									<Box
+										sx={{
+											fontSize: "0.65rem",
+											color: "#90a4c0",
+											bgcolor: "#f0f4fb",
+											border: "1px solid #e3eaf5",
+											px: 1,
+											py: 0.25,
+											borderRadius: "4px",
+											letterSpacing: "0.04em",
+										}}
+									>
+										Generated
+									</Box>
 								</Box>
+
+								{/* Chart renders here — hooks live in PlotlyChart, not in a class method */}
+								<PlotlyChart
+									data={chart.data}
+									layout={chart.layout}
+								/>
 							</Box>
-							{chart.display()}
-						</Box>
-					))
+						);
+					})
 				)}
 				<div ref={bottomRef} />
 			</Box>

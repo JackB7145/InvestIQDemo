@@ -149,3 +149,75 @@ def _llm_text(resp) -> str:
         return fallback
     log.error(f"[_llm_text] Could not extract text from response: {repr(resp)[:300]}")
     return ""
+
+def stream_status(state, message: str) -> dict:
+    """Emit a thinking_content status update to the frontend."""
+    token_queue = state.get("token_queue")
+    chunk_str = emit("thinking_content", message)
+    if token_queue:
+        token_queue.put(chunk_str)
+        token_queue.put("__thinking_done__")
+    return {"messages": [], "stream_chunks": [chunk_str]}
+
+def llm_call(
+    state,
+    llm,
+    messages: list,
+    *,
+    status_before: str | None = None,
+    status_after: str | None = None,
+    label: str = "llm_call",
+    truncate_result: int | None = None,
+) -> str:
+    """Intermediary layer between the LLM and the application.
+
+    Emits status updates via stream_status before/after the call, invokes the
+    LLM, extracts the text content, optionally truncates it, and logs timing.
+    Returns the extracted text string (never raises — returns "" on failure).
+
+    Args:
+        state:          LangGraph state dict (passed through to stream_status).
+        llm:            Any callable that accepts a list of messages and returns
+                        an LLM response object understood by _llm_text().
+        messages:       The message list to send to the LLM.
+        status_before:  Optional status string emitted before the LLM call.
+        status_after:   Optional status string emitted after a successful call.
+        label:          A short name used in log lines for traceability.
+        truncate_result: If set, the result is hard-truncated to this many chars.
+
+    Returns:
+        Extracted text from the LLM response, or "" on any error.
+    """
+    if status_before:
+        stream_status(state, status_before)
+
+    log.debug(f"[{label}] Sending {len(messages)} message(s) to LLM")
+    t0 = time.time()
+
+    try:
+        response = llm(messages)
+    except Exception as exc:
+        log.error(f"[{label}] LLM raised an exception: {exc}", exc_info=True)
+        stream_status(state, f"⚠️ {label}: LLM error — {_truncate(str(exc), 80)}")
+        return ""
+
+    elapsed = time.time() - t0
+    log.debug(f"[{label}] LLM responded in {elapsed:.2f}s")
+
+    text = _llm_text(response)
+
+    if not text:
+        log.warning(f"[{label}] _llm_text returned empty string")
+        stream_status(state, f"⚠️ {label}: received empty response from LLM")
+        return ""
+
+    if truncate_result is not None and len(text) > truncate_result:
+        log.debug(f"[{label}] Truncating result from {len(text)} → {truncate_result} chars")
+        text = text[:truncate_result]
+
+    log.debug(f"[{label}] Result preview: {_truncate(text, LOG_CHUNK_PREVIEW)}")
+
+    if status_after:
+        stream_status(state, status_after)
+
+    return text

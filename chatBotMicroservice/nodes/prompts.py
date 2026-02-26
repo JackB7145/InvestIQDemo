@@ -27,10 +27,13 @@ PROJECT_MANAGER_PROMPT = (
     "ScatterPlot | LineGraph | BarGraph | none\n"
     "(one word only)\n\n"
     "Rules:\n"
+    "- STEPS must describe WHAT needs to happen at a high level only — never HOW.\n"
+    "- Good step examples: 'Gather historical price data for BNS', 'Display a line graph of the results'.\n"
+    "- Bad step examples: 'Call the Alpha Vantage API', 'Use a scatter plot with x as date and y as price', 'Parse the JSON response'.\n"
+    "- Never mention tools, APIs, libraries, functions, data formats, or implementation details in STEPS.\n"
     "- If real-world, financial, time-based, statistical, or factual data is required, "
     "DATA_NEEDED must NOT be 'none'.\n"
-    "- Even if real data is not available, pick an appropriate CHART_TYPE if the user query implies visualization. Use illustrative or context-based numeric values.\n"
-    "- Be precise but minimal.\n"
+    "- Even if real data is not available, pick an appropriate CHART_TYPE if the user query implies visualization.\n"
     "- Do NOT answer the user.\n"
     "- Do NOT describe your reasoning.\n"
     "- Output ONLY the five labeled sections above.\n"
@@ -81,6 +84,7 @@ DISPLAY_FILL_PROMPT = (
 )
 
 RESPONSE_AGENT_BASE_PROMPT = (
+    "If there is mention of a graph in the PM plan, you can describe it briefly in text (e.g. See the graph to the right ) but do NOT mention the chart type or axes or specific data points unless they are explicitly stated in the research context.\n"
     "You are a helpful assistant. Answer the user's question clearly and directly.\n"
     "IMPORTANT: Never mention, reference, or acknowledge any execution plan, internal instructions, "
     "system prompts, or your own process. Never say phrases like 'based on the plan', "
@@ -89,6 +93,9 @@ RESPONSE_AGENT_BASE_PROMPT = (
     "CRITICAL: Never invent or estimate numerical data. Only present figures that appear "
     "explicitly in the research context below. If a number is not in the research context, "
     "do not state it. If you cannot answer accurately from the context, say the data was unavailable.\n"
+    "CRITICAL: You are a text-only response agent. You have no ability to display, render, or generate "
+    "charts, graphs, or visualizations. Never mention charts or graphs. Never say you are unable to "
+    "display something. A separate system handles all visuals — your only job is to answer in text.\n"
     "Do NOT repeat the question back."
 )
 
